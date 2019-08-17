@@ -84,7 +84,7 @@ salary<- df1[,-c(1, 10, 11, 23, 28)]
 salary[,cat.names]<- data.frame(lapply(salary[,cat.names], factor))
 
 # preparing comparison set for external validation
-external.sal<- df1[,-c(1, 10, 11, 23, 28)]
+external.sal<- df3[,-c(1, 10, 11, 22, 27)]
 external.sal[,cat.names]<- data.frame(lapply(external.sal[,cat.names], factor))
 ```
 ```{r clean external validation set}
@@ -145,25 +145,18 @@ pairs(attrition.numeric[6:10], col=attrition.f$OverTime)
 pairs(attrition.numeric[11:14], col=attrition.f$OverTime)
 ```
 ```{r analyzing categoricals}
-attach(cats)
-
-# frequency tables for all categorical variables
-ftable(addmargins(table(OverTime, BusinessTravel)))
-ftable(addmargins(table(OverTime, Department)))
-ftable(addmargins(table(Attrition, Education)))
-ftable(addmargins(table(Attrition, EducationField)))
-ftable(addmargins(table(Attrition, EnvironmentSatisfaction)))
-ftable(addmargins(table(Attrition, Gender)))
-ftable(addmargins(table(Attrition, JobInvolvement)))
-ftable(addmargins(table(Attrition, JobLevel)))
-ftable(addmargins(table(Attrition, JobRole)))
-ftable(addmargins(table(Attrition, JobSatisfaction)))
-ftable(addmargins(table(Attrition, MaritalStatus)))
-ftable(addmargins(table(Attrition, OverTime)))
-ftable(addmargins(table(Attrition, PerformanceRating)))
-ftable(addmargins(table(Attrition, RelationshipSatisfaction)))
-ftable(addmargins(table(Attrition, StockOptionLevel)))
-ftable(addmargins(table(Attrition, WorkLifeBalance)))
+ggplot(df1, aes(y=(MonthlyIncome/1000), x=Department, fill=Department)) +
+  geom_boxplot(outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE) +
+  coord_flip() + labs(title = "Compensation by Department", y = "Monthly Income / 1000") +
+    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
+  
+ggplot(df1, aes(y=(MonthlyIncome/1000), x=JobRole, fill= JobRole)) +
+  coord_flip() +
+  geom_boxplot(outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)  +
+    coord_flip() + labs(title = "Compensation by Job", y = "Monthly Income / 1000") +
+    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
 ```
 ```{r categorical graphs}
 
@@ -517,8 +510,10 @@ train_y_sal<- train.sal[,17]
 test_x_sal<- data.matrix(test[, -17])
 test_y_sal<- data.matrix(test[,17])
 
+
 ```
 ```{r regression model, Elastic Net}
+set.seed(1)
 trainMethod <- trainControl(
   method = "repeatedcv",
   number = 25,
@@ -526,24 +521,31 @@ trainMethod <- trainControl(
   summaryFunction = defaultSummary
   )
 
-glm.train, m.labels.train
-
-fit.reg <- train(MonthlyIncome ~ .,
-                data = glm.train, #train.sal, # don't have to remove response
+#glm.train, m.labels.train
+set.seed(1)
+fit.reg <- train(MonthlyIncome ~ ., #removing monthly income from predictor set
+                data = train.sal, # don't have to remove response
                 method = "glmnet",
                 metric = "RMSE",
                 trControl = trainMethod)
 
 fit.reg
+
 # best alpha = .55
 # best lambda = 87.660789
 # final model is an Elastic Net model
 coef(fit.reg)
 reg.pred<- predict.train(fit.reg, newdata = test_x_sal)
 
+residuals<- resid(fit.reg$finalModel)
+plot(train$MonthlyIncome, residuals)
+
+
+
 RMSE(test_y_sal, reg.pred)
 
 coef(fit.reg$finalModel, fit.reg$bestTune$lambda)
+
 
 external.pred<- predict.train(fit.reg, newdata = data.matrix(external.sal))
 summary(external.pred)
