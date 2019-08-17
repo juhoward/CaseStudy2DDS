@@ -279,7 +279,7 @@ predictions.knn.final<- knn(train[,-2], test[,-2], labels.train, 13)
 
 confusionMatrix(predictions.knn.final, as.factor(labels.test))
 ```
-```{r logistic}
+```{r logistic with true categories}
 library(glmnet)
 library(ROCR)
 ####### glmnet can't handle categoricals, even in numeric for, it treats them as integers.
@@ -330,6 +330,33 @@ logit.model<- glmnet(model.glm.train, m.labels.train,
 
 logit.model$beta
 plot(test.cvfit)
+```
+```{r logistic with levels as integers}
+
+####### to provide summariezed results for a better presentation, we will run a dataset that
+####### codes the numeric categorical variables as integer values 
+
+
+set.seed(1)
+glm.index.i<- sample(1:nrow(glm.attrition), .7*nrow(glm.attrition))
+glm.train.i<- glm.attrition[glm.index.i,]
+glm.test.i<- glm.attrition[-glm.index.i,]
+
+
+### use cross validatoin to find the best lambda value
+test.cvfit.i<- cv.glmnet(model.glm.train, m.labels.train, 
+                       family = 'binomial',
+                       type.measure = 'class',
+                       nlambda = 1000,
+                       standardize = F) #be sure to set to FALSE since we already standardized
+logit.model.i<- glmnet(model.glm.train, m.labels.train,
+                     alpha = 1,
+                     family = "binomial",
+                     standardize = F,
+                     lambda = test.cvfit$lambda.min)
+
+logit.model.i$beta
+plot(test.cvfit.i)
 ```
 
 Top 3 factors leading to attrition
@@ -382,7 +409,7 @@ form.2<- as.formula(paste(". ~ ", paste(xnames, collapse = "+")))
 
 df2.0$Attrition<- attrition.f$Attrition[300]
 
-glm.df2.0<- model.matrix(form, model.frame(df2.0))
+glm.df2.0<- model.matrix(form, data.frame(df2.0))
 
 log.final.preds<- predict(logit.model, newx= glm.df2.0, type = 'response')
 
