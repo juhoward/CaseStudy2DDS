@@ -286,11 +286,13 @@ m.labels.train<- data.matrix(attrition.f[glm.index.i, 2])
 m.labels.test<- data.matrix(attrition.f[-glm.index.i, 2])
 
 ### use cross validatoin to find the best lambda value
+set.seed(1)
 test.cvfit.i<- cv.glmnet(glm.train.i, m.labels.train, 
                        family = 'binomial',
                        type.measure = 'class',
                        nlambda = 1000
                        ) 
+set.seed(1)
 logit.model.i<- glmnet(glm.train.i, m.labels.train,
                      alpha = 1,
                      family = "binomial",
