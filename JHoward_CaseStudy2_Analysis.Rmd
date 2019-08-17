@@ -16,6 +16,10 @@ derived attributes/variables are possible
 Identify job role specific trends that exist.
 
 Make model that predicts salary with RMSE < $3000
+
+Link to video presentation:
+https://www.screencast.com/t/MsRfs5V5a
+
 ```{r echo=F, include=F}
 library(doParallel)
 cores <- parallel::detectCores()
@@ -157,6 +161,32 @@ ggplot(df1, aes(y=(MonthlyIncome/1000), x=JobRole, fill= JobRole)) +
              outlier.size=2, notch=FALSE)  +
     coord_flip() + labs(title = "Compensation by Job", y = "Monthly Income / 1000") +
     theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
+
+ggplot(df1, aes(y=(MonthlyIncome,fill= MonthlyIncome))) +
+  coord_flip() +
+  geom_boxplot(outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)  +
+    coord_flip() + labs(title = "Compensation by Job", y = "Monthly Income / 1000") +
+    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
+```
+```{r}
+plotdf<- df1
+plotdf[,24]<- df1[,factor(24)]
+plotdf[,24]<- data.frame(lapply(plotdf[,24], factor))
+
+ggplot(plotdf, aes(x=Age, y=MonthlyIncome, col=as.factor(PerformanceRating))) + 
+  geom_point()+
+  geom_smooth(method=lm)+
+  labs(title = "Compensation by Age") +
+  theme(plot.title = element_text(hjust = .5)) +
+  guides(fill= guide_legend(title= element_blank()))
+
+ggplot(df1, aes(x=as.factor(PerformanceRating), y=MonthlyIncome, col=Age)) + 
+  geom_point()+
+  labs(title = "Compensation by Performance", x= "Performance Rating") +
+  theme(plot.title = element_text(hjust = .5))
+
+
 ```
 ```{r categorical graphs}
 
