@@ -1,0 +1,479 @@
+---
+title: "JHoward_CaseStudy2DDS"
+author: "Justin Howard"
+date: "August 7, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Identifying the top 3 factors that lead to attrition.
+
+derived attributes/variables are possible
+
+Identify job role specific trends that exist.
+
+```{r loading data}
+library(frequency)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(corrplot)
+library(cowplot)
+library(purrr)
+library(class)
+library(caret)
+library(dataMaid)
+library(readxl)
+setwd('c:/users/howar/documents/r_wd/dds/casestudy2dds')
+df1<- read.csv("CaseStudy2-data.csv")
+
+df2<- read.csv("CaseStudy2CompSet No Attrition.csv")
+
+df3<- read_excel("CaseStudy2Compset No Salary.xlsx")
+
+
+str(df1)
+```
+
+```{r data structure exploration}
+# make new dataset made of only useful variables
+attrition<- df1[,-c(1, 10, 11, 23, 28)]
+str(attrition)
+# identify the categorical and continuous variables 
+cats<- df1[, c(3, 4, 6, 8, 9, 12, 13, 15:19, 24, 26, 27,29, 32)]
+cont<- df1[, c(3, 2, 5, 7, 14, 20, 21, 22, 25, 30, 31, 33:36)]
+
+# make lists of column names to refer to
+cat.names<- colnames(cats)
+cont.names<- colnames(cont)
+
+attrition.f<- attrition
+
+# turn all categorical into factors for graphing and analysis
+attrition.f[,cat.names]<- data.frame(lapply(attrition[,cat.names], factor))
+
+
+
+# identify the predictors and the response
+x.vars<- colnames(attrition[,-1])
+y.var<- colnames(attrition[,1])
+
+
+######################
+### Salary for lm
+######################
+
+salary<- df1[,-c(1, 10, 11, 23, 28)]
+salary[,cat.names]<- data.frame(lapply(salary[,cat.names], factor))
+
+# preparing comparison set for external validation
+external.sal<- df1[,-c(1, 10, 11, 23, 28)]
+external.sal[,cat.names]<- data.frame(lapply(external.sal[,cat.names], factor))
+```
+```{r clean external validation set}
+df2.0<- df2[,-c(1, 9, 10, 22, 27)]
+
+df2.0[,cat.names]<- data.frame(lapply(df2.0[,cat.names], factor))
+```
+```{r parallel computing}
+# enabling parallel computing to speed things up
+library(doParallel)
+cores <- parallel::detectCores()
+# [1] 8
+
+# Generally do one less
+workers <- makeCluster(8L)
+
+# register for parallel computation
+registerDoParallel(workers)
+```
+```{r density plots}
+# assessing normality of the continuous variables
+columns1<- colnames(cont) [2:9]
+columns2<- colnames(cont) [10:15]
+dens1 <- lapply(columns1, FUN=function(var) {
+  ggplot(cont, aes_string(x=var)) + 
+    geom_density(fill='gray') +
+    geom_vline(aes(xintercept=mean(cont[,var])), color='blue', size=1) +
+    geom_vline(aes(xintercept=median(cont[, var])), color='darkmagenta', size=1) +
+    geom_vline(aes(xintercept=quantile(cont[, var], 0.25)), 
+               linetype='dashed', size=0.5) + 
+    geom_vline(aes(xintercept=quantile(cont[, var], 0.75)), 
+               linetype='dashed', size=0.5)
+})
+
+dens2 <- lapply(columns2, FUN=function(var) {
+  ggplot(cont, aes_string(x=var)) + 
+    geom_density(fill='gray') +
+    geom_vline(aes(xintercept=mean(cont[,var])), color='blue', size=1) +
+    geom_vline(aes(xintercept=median(cont[, var])), color='darkmagenta', size=1) +
+    geom_vline(aes(xintercept=quantile(cont[, var], 0.25)), 
+               linetype='dashed', size=0.5) + 
+    geom_vline(aes(xintercept=quantile(cont[, var], 0.75)), 
+               linetype='dashed', size=0.5)
+})
+
+do.call(grid.arrange, args=c(dens1, list(ncol=3)))
+do.call(grid.arrange, args=c(dens2, list(ncol=3)))
+```
+```{r scatterplots}
+# assessing linearity of the continuous variables
+attrition.numeric  <- attrition.f %>% keep(is.integer)
+pairs(attrition.numeric[1:5], col=attrition.f$Attrition)
+pairs(attrition.numeric[6:11], col=attrition.f$Attrition)
+pairs(attrition.numeric[12:14], col=attrition.f$Attrition)
+
+pairs(attrition.numeric[1:5], col=attrition.f$OverTime)
+pairs(attrition.numeric[6:10], col=attrition.f$OverTime)
+pairs(attrition.numeric[11:14], col=attrition.f$OverTime)
+```
+```{r analyzing categoricals}
+attach(cats)
+
+# frequency tables for all categorical variables
+ftable(addmargins(table(OverTime, BusinessTravel)))
+ftable(addmargins(table(OverTime, Department)))
+ftable(addmargins(table(Attrition, Education)))
+ftable(addmargins(table(Attrition, EducationField)))
+ftable(addmargins(table(Attrition, EnvironmentSatisfaction)))
+ftable(addmargins(table(Attrition, Gender)))
+ftable(addmargins(table(Attrition, JobInvolvement)))
+ftable(addmargins(table(Attrition, JobLevel)))
+ftable(addmargins(table(Attrition, JobRole)))
+ftable(addmargins(table(Attrition, JobSatisfaction)))
+ftable(addmargins(table(Attrition, MaritalStatus)))
+ftable(addmargins(table(Attrition, OverTime)))
+ftable(addmargins(table(Attrition, PerformanceRating)))
+ftable(addmargins(table(Attrition, RelationshipSatisfaction)))
+ftable(addmargins(table(Attrition, StockOptionLevel)))
+ftable(addmargins(table(Attrition, WorkLifeBalance)))
+```
+```{r categorical graphs}
+
+lotsabars <- function(df, x,y){
+  ggplot(data= df, aes_string(x = x, fill = y)) + 
+    geom_bar(alpha = 0.9, position = "fill") +
+    coord_flip() +
+    labs(title = x, y = "Proportion") +
+    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
+}
+# identifying response
+yname  <-  "Attrition"
+
+# isolating numeric and categoricals
+
+attrition.cats  <- attrition.f %>% keep(is.factor)
+
+# identifying predictors
+xname  <-  names(attrition.cats[,-1])
+
+
+plist <- lapply(xname, function(x) lotsabars(df = attrition.cats, x = x, y = yname))
+
+plot_grid(plotlist = plist, ncol = 2)
+
+lapply(xname, function(x) lotsabars(df = attrition.cats, x = x, y = yname))
+```
+```{r plots of particular interest}
+  ggplot(data= attrition, aes_string(x = attrition$JobInvolvement, fill = attrition$Attrition)) + 
+    geom_bar(alpha = 0.9, position = "fill") +
+    coord_flip() +
+    labs(title = "Job Involvement", y = "Proportion") +
+    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5)) +
+    guides(fill= guide_legend(title = "Attrition"))
+
+  ggplot(data= attrition, aes_string(x = attrition$Department, fill = attrition$OverTime)) + 
+    geom_bar(alpha = 0.9, position = "fill") +
+    coord_flip() +
+    labs(title = "Job Involvement", y = "Proportion") +
+    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5)) +
+    guides(fill= guide_legend(title = "Attrition"))
+  
+yovertime<- "OverTime"
+lapply(xname, function(x) lotsabars(df = attrition.cats, x = x, y = yovertime))
+#attrition.percent<- count(attrition.f$Attrition)
+
+#  ggplot(attrition) +
+#    geom_col(aes(Attrition)) +
+#    coord_flip() +
+#    labs(title = "Attrition", y = "Count") +
+#    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5)) 
+  
+#  ggplot(a)+
+#    aes(x= a, fill = summary(Attrition)) +
+#    geom_bar(position = 'fill')
+```
+```{r correlation plot}
+# correlation function for numeric and continuous predictors
+correlator  <-  function(df){
+	df %>%
+		keep(is.numeric) %>%
+		tidyr::drop_na() %>%
+		cor %>%
+		corrplot( addCoef.col = "white", number.digits = 2,
+			 number.cex = 0.5, method="square",
+			 order="hclust",
+			 tl.srt=45, tl.cex = 0.8)
+}
+
+correlator(attrition.numeric)
+```
+```{r correlations of interest}
+
+interest<- attrition %>%
+  select(c("OverTime", "MaritalStatus"))
+interest<- sapply(interest, function(x) as.numeric(x))
+interest.plus<- cbind(interest, attrition.numeric)
+
+correlator(interest.plus)
+boring<- c("DistanceFromHome", "HourlyRate", "DailyRate", "Education", "NumCompaniesWorked", "EnvironmentSatisfaction", "WorkLifeBalance","RelationshipSatisfaction", "JobLevel")
+
+dropout<- function(df, x) {
+  droplist<- x
+  soCool<<- df[,!colnames(df) %in% droplist]
+}
+
+dropout(interest.plus, boring)
+
+correlator(soCool)
+```
+```{r train test set split}
+
+# changing nominal factors to ordinal factors so algorithms work.
+columns<- c(2, 3, 5, 8, 10, 14, 16, 20)
+attrition[, columns]<- sapply(attrition[, columns], as.numeric)
+#creating train-test set split of 70:30
+set.seed(1)
+index<- sample(1:nrow(attrition), .7*nrow(attrition))
+train<- attrition[index,]
+test<- attrition[-index,]
+
+labels.train<- train$Attrition
+labels.test<- test$Attrition
+
+# creating alternate training and test sets true to factor status of all variables
+set.seed(1)
+index.f<- sample(1:nrow(attrition.f), .7*nrow(attrition.f))
+train.f<- attrition.f[index.f,]
+test.f<- attrition.f[-index.f,]
+
+f.labels.train<- train.f$Attrition
+f.labels.test<- test.f$Attrition
+```
+```{r KNN}
+for (k in 1:20) {
+  print(k)
+  # don't forget to remove response!
+  predicted.labels<- knn(train[,-2], test[,-2], labels.train, k)
+  num.incorrect.labels<- sum(predicted.labels != labels.test)
+  misclassification.rate<- num.incorrect.labels / 
+                            length(labels.test)
+  print(misclassification.rate)
+}
+## The best K is 13.
+# don't forget to remove response!
+predictions.knn.final<- knn(train[,-2], test[,-2], labels.train, 13)
+
+confusionMatrix(predictions.knn.final, as.factor(labels.test))
+```
+```{r logistic}
+library(glmnet)
+library(ROCR)
+####### glmnet can't handle categoricals, even in numeric for, it treats them as integers.
+####### we must make dummy variables for all categoricals using the model.matrix function.
+####### this means we must first pre-standardizing integer values so we can turn off glmnet's 
+####### stardardize option.
+
+
+### identify names of integer variables
+integers<- attrition.f %>%
+  keep(is.integer)
+int.names<- colnames(integers)
+
+### make new df to modify
+glm.attrition<- attrition.f
+
+### scale integer variables
+glm.attrition[,int.names]<- lapply(attrition.f[,int.names], scale)
+
+################### make formula object
+####get variables names
+glm.attrition.1<- glm.attrition[,-2]
+xnames<- colnames(glm.attrition.1)
+
+### make formula object
+form<- as.formula(paste("Attrition ~ ", paste(xnames, collapse = "+")))
+
+############# create model matrix to make categorical variables into dummy variables
+glm.attrition<- model.matrix(form, model.frame(glm.attrition))
+
+set.seed(1)
+glm.index<- sample(1:nrow(glm.attrition), .7*nrow(glm.attrition))
+glm.train<- glm.attrition[glm.index,]
+glm.test<- glm.attrition[-glm.index,]
+
+
+### use cross validatoin to find the best lambda value
+test.cvfit<- cv.glmnet(model.glm.train, m.labels.train, 
+                       family = 'binomial',
+                       type.measure = 'class',
+                       nlambda = 1000,
+                       standardize = F) #be sure to set to FALSE since we already standardized
+logit.model<- glmnet(model.glm.train, m.labels.train,
+                     alpha = 1,
+                     family = "binomial",
+                     standardize = F,
+                     lambda = test.cvfit$lambda.min)
+
+logit.model$beta
+plot(test.cvfit)
+```
+
+Top 3 factors leading to attrition
+1. Working overtime
+2. Marital Status
+3. Job Involvement 
+```{r logistic model predictions}
+
+fit.pred<- predict(logit.model, newx = glm.test, type= 'response')
+pred<- prediction(fit.pred[,1], f.labels.test)
+roc.perf<- performance(pred, measure = 'tpr', x.measure = 'fpr')
+auc.train<- performance (pred, measure = 'auc')
+auc.train<- auc.train@y.values
+```
+
+```{r ROC curve, confusion matrix}
+plot(roc.perf,main="LASSO Error Rate")
+abline(a=0, b= 1) #Ref line indicating poor performance
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+
+
+#build confusion matrix
+confusion.matrix <- table( fit.pred>0.5, f.labels.test )
+
+
+# Performance analysis
+tn <- confusion.matrix[1]
+tp <- confusion.matrix[4]
+fp <- confusion.matrix[3]
+fn <- confusion.matrix[2]
+
+(accuracy <- (tp + tn) / (tp + tn + fp + fn))
+(sensitivity<- (tp / (tp + fn)))
+(specificity<- (tn / (tn + fp)))
+(misclassification.rate <- 1 - accuracy)
+(recall <- tp / (tp + fn))
+(precision <- tp / (tp + fp))
+(null.error.rate <- tn / (tp + tn + fp + fn))
+(FScore <- 2 * precision * recall / (precision + recall))
+confusion.matrix
+```
+```{r logistic predictions}
+
+### transform external validation set using model.matrix
+### logit.model needs the same dimensions as newx
+### first, make a new formula object because the validation set is missing the repsonse
+
+### make formula object
+form.2<- as.formula(paste(". ~ ", paste(xnames, collapse = "+")))
+
+df2.0$Attrition<- attrition.f$Attrition[300]
+
+glm.df2.0<- model.matrix(form, model.frame(df2.0))
+
+log.final.preds<- predict(logit.model, newx= glm.df2.0, type = 'response')
+
+binary<- function(x) {
+  x<- as.factor(ifelse(x > .5, "Yes", "No"))
+}
+
+attrition.preds<- sapply(log.final.preds, binary)
+write.csv(attrition.preds, "Case2PredictionsHoward Attrition.csv")
+```
+```{r KNN caret}
+# caret version of knn classifier must have nominal factors.
+#ttrition.f<- df1[,-c(1, 10, 11, 23, 28)]
+# creating new training set with nominal factors
+#set.seed(1)
+#index<- sample(1:nrow(attrition.f), .7*nrow(attrition.f))
+#train.f<- attrition.f[index,]
+#test.f<- attrition.f[-index,]
+
+trainMethod <- trainControl(
+  method = "repeatedcv",
+  number = 25,
+  repeats = 5,
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE)
+
+fit.nb <- train(Attrition ~ .,
+                data = train.f, # don't have to remove response
+                method = "knn",
+                metric = "Spec",
+                trControl = trainMethod)
+
+fit.nb$results
+```
+```{r naive bayes}
+
+trainMethod <- trainControl(
+  method = "repeatedcv",
+  number = 25,
+  repeats = 5,
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE)
+
+fit.nb <- train(Attrition ~ .,
+                data = train.f,  # don't have to remove response
+                method = "nb",
+                metric = "Spec",
+                trControl = trainMethod)
+summary(fit.nb)
+fit.nb$results
+```
+```{r Regression Data prep}
+# preparing data for linear regression with monthly salary as a response
+set.seed(1)
+index.sal<- sample(1:nrow(salary), .7*nrow(salary))
+train.sal<- data.matrix(salary[index.sal,])
+test.sal<- salary[-index.sal,]
+
+train_x_sal<- data.matrix(train.sal[,-17])
+train_y_sal<- train.sal[,17]
+
+test_x_sal<- data.matrix(test[, -17])
+test_y_sal<- data.matrix(test[,17])
+
+```
+```{r regression model, Elastic Net}
+trainMethod <- trainControl(
+  method = "repeatedcv",
+  number = 25,
+  repeats = 5,
+  summaryFunction = defaultSummary
+  )
+
+fit.reg <- train(MonthlyIncome ~ .,
+                data = train.sal, # don't have to remove response
+                method = "glmnet",
+                metric = "RMSE",
+                trControl = trainMethod)
+
+fit.reg
+# best alpha = .55
+# best lambda = 87.660789
+# final model is an Elastic Net model
+coef(fit.reg)
+reg.pred<- predict.train(fit.reg, newdata = test_x_sal)
+
+RMSE(test_y_sal, reg.pred)
+
+coef(fit.reg$finalModel, fit.reg$bestTune$lambda)
+
+external.pred<- predict.train(fit.reg, newdata = data.matrix(external.sal))
+summary(external.pred)
+write.csv(external.pred, "Case2PredictionsHoward Salary.csv")
+```
