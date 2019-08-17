@@ -15,6 +15,18 @@ derived attributes/variables are possible
 
 Identify job role specific trends that exist.
 
+Make model that predicts salary with RMSE < $3000
+```{r echo=F, include=F}
+library(doParallel)
+cores <- parallel::detectCores()
+# [1] 8 for me, different for your machine
+
+# Generally do one less
+workers <- makeCluster(7L)
+
+# register for parallel computation
+registerDoParallel(workers)
+```
 ```{r loading data}
 library(frequency)
 library(ggplot2)
@@ -78,7 +90,7 @@ external.sal[,cat.names]<- data.frame(lapply(external.sal[,cat.names], factor))
 ```{r clean external validation set}
 df2.0<- df2[,-c(1, 9, 10, 22, 27)]
 
-df2.0[,cat.names]<- data.frame(lapply(df2.0[,cat.names], factor))
+df2.0[,cat.names[-1]]<- data.frame(lapply(df2.0[,cat.names[-1]], factor))
 ```
 ```{r parallel computing, echo=F, include=F}
 # enabling parallel computing to speed things up
@@ -308,7 +320,7 @@ Top 3 factors leading to attrition
 3. Job Involvement 
 ```{r logistic with true categories}
 
-####### glmnet can't handle categoricals, even in numeric for, it treats them as integers.
+####### glmnet can't handle categoricals, even in numeric form, it treats them as integers.
 ####### we must make dummy variables for all categoricals using the model.matrix function.
 ####### this means we must first pre-standardizing integer values so we can turn off glmnet's 
 ####### stardardize option.
@@ -319,12 +331,13 @@ integers<- attrition.f %>%
   keep(is.integer)
 int.names<- colnames(integers)
 
+glm.attrition<- attrition.f
 ### scale integer variables
 glm.attrition[,int.names]<- lapply(attrition.f[,int.names], scale)
 
 ################### make formula object
 ####get variables names
-glm.attrition.1<- glm.attrition[,-2]
+glm.attrition.1<- glm.attrition
 xnames<- colnames(glm.attrition.1)
 
 ### make formula object
@@ -340,12 +353,12 @@ glm.test<- glm.attrition[-glm.index,]
 
 
 ### use cross validatoin to find the best lambda value
-test.cvfit<- cv.glmnet(model.glm.train, m.labels.train, 
+test.cvfit<- cv.glmnet(glm.train, m.labels.train, 
                        family = 'binomial',
                        type.measure = 'class',
                        nlambda = 1000,
                        standardize = F) #be sure to set to FALSE since we already standardized
-logit.model<- glmnet(model.glm.train, m.labels.train,
+logit.model<- glmnet(glm.train, m.labels.train,
                      alpha = 1,
                      family = "binomial",
                      standardize = F,
@@ -357,7 +370,7 @@ plot(test.cvfit)
 
 ```{r logistic model predictions}
 
-fit.pred<- predict(logit.model, newx = glm.test, type= 'response')
+fit.pred<- predict(logit.model.i, newx = glm.test.i, type= 'response')
 pred<- prediction(fit.pred[,1], f.labels.test)
 roc.perf<- performance(pred, measure = 'tpr', x.measure = 'fpr')
 auc.train<- performance (pred, measure = 'auc')
@@ -402,8 +415,9 @@ form.2<- as.formula(paste(". ~ ", paste(xnames, collapse = "+")))
 df2.0$Attrition<- attrition.f$Attrition[300]
 
 glm.df2.0<- model.matrix(form, data.frame(df2.0))
-
-log.final.preds<- predict(logit.model, newx= glm.df2.0, type = 'response')
+data.matrix(data.frame(attrition.f[,-2]))
+df2.0<- data.matrix(data.frame(df2.0))
+log.final.preds<- predict(logit.model.i, newx= df2.0, type = 'response')
 
 binary<- function(x) {
   x<- as.factor(ifelse(x > .5, "Yes", "No"))
@@ -428,13 +442,13 @@ trainMethod <- trainControl(
   summaryFunction = twoClassSummary,
   classProbs = TRUE)
 
-fit.nb <- train(Attrition ~ .,
+fit.knn <- train(Attrition ~ .,
                 data = train.f, # don't have to remove response
                 method = "knn",
                 metric = "Spec",
                 trControl = trainMethod)
 
-fit.nb$results
+fit.knn$results
 ```
 ```{r naive bayes}
 
