@@ -27,6 +27,8 @@ library(class)
 library(caret)
 library(dataMaid)
 library(readxl)
+library(glmnet)
+library(ROCR)
 setwd('c:/users/howar/documents/r_wd/dds/casestudy2dds')
 df1<- read.csv("CaseStudy2-data.csv")
 
@@ -78,7 +80,7 @@ df2.0<- df2[,-c(1, 9, 10, 22, 27)]
 
 df2.0[,cat.names]<- data.frame(lapply(df2.0[,cat.names], factor))
 ```
-```{r parallel computing}
+```{r parallel computing, echo=F, include=F}
 # enabling parallel computing to speed things up
 library(doParallel)
 cores <- parallel::detectCores()
@@ -194,17 +196,6 @@ lapply(xname, function(x) lotsabars(df = attrition.cats, x = x, y = yname))
   
 yovertime<- "OverTime"
 lapply(xname, function(x) lotsabars(df = attrition.cats, x = x, y = yovertime))
-#attrition.percent<- count(attrition.f$Attrition)
-
-#  ggplot(attrition) +
-#    geom_col(aes(Attrition)) +
-#    coord_flip() +
-#    labs(title = "Attrition", y = "Count") +
-#    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5)) 
-  
-#  ggplot(a)+
-#    aes(x= a, fill = summary(Attrition)) +
-#    geom_bar(position = 'fill')
 ```
 ```{r correlation plot}
 # correlation function for numeric and continuous predictors
@@ -222,7 +213,6 @@ correlator  <-  function(df){
 correlator(attrition.numeric)
 ```
 ```{r correlations of interest}
-
 interest<- attrition %>%
   select(c("OverTime", "MaritalStatus"))
 interest<- sapply(interest, function(x) as.numeric(x))
@@ -241,7 +231,6 @@ dropout(interest.plus, boring)
 correlator(soCool)
 ```
 ```{r train test set split}
-
 # changing nominal factors to ordinal factors so algorithms work.
 columns<- c(2, 3, 5, 8, 10, 14, 16, 20)
 attrition[, columns]<- sapply(attrition[, columns], as.numeric)
@@ -279,9 +268,44 @@ predictions.knn.final<- knn(train[,-2], test[,-2], labels.train, 13)
 
 confusionMatrix(predictions.knn.final, as.factor(labels.test))
 ```
+```{r logistic with levels as integers}
+
+####### to provide summariezed results for a better presentation, we will run a dataset that
+####### codes the numeric categorical variables as integer values 
+
+### make new df for variables modified as a matrix
+glm.attrition<- data.matrix(data.frame(attrition.f[,-2]))
+
+set.seed(1)
+glm.index.i<- sample(1:nrow(glm.attrition), .7*nrow(glm.attrition))
+glm.train.i<- glm.attrition[glm.index.i,]
+glm.test.i<- glm.attrition[-glm.index.i,]
+
+# make training and test label matrices
+m.labels.train<- data.matrix(attrition.f[glm.index.i, 2])
+m.labels.test<- data.matrix(attrition.f[-glm.index.i, 2])
+
+### use cross validatoin to find the best lambda value
+test.cvfit.i<- cv.glmnet(glm.train.i, m.labels.train, 
+                       family = 'binomial',
+                       type.measure = 'class',
+                       nlambda = 1000
+                       ) 
+logit.model.i<- glmnet(glm.train.i, m.labels.train,
+                     alpha = 1,
+                     family = "binomial",
+                     lambda = test.cvfit.i$lambda.min)
+
+logit.model.i$beta
+plot(test.cvfit.i)
+```
+
+Top 3 factors leading to attrition
+1. Working overtime
+2. Marital Status
+3. Job Involvement 
 ```{r logistic with true categories}
-library(glmnet)
-library(ROCR)
+
 ####### glmnet can't handle categoricals, even in numeric for, it treats them as integers.
 ####### we must make dummy variables for all categoricals using the model.matrix function.
 ####### this means we must first pre-standardizing integer values so we can turn off glmnet's 
@@ -292,9 +316,6 @@ library(ROCR)
 integers<- attrition.f %>%
   keep(is.integer)
 int.names<- colnames(integers)
-
-### make new df to modify
-glm.attrition<- attrition.f
 
 ### scale integer variables
 glm.attrition[,int.names]<- lapply(attrition.f[,int.names], scale)
@@ -331,38 +352,7 @@ logit.model<- glmnet(model.glm.train, m.labels.train,
 logit.model$beta
 plot(test.cvfit)
 ```
-```{r logistic with levels as integers}
 
-####### to provide summariezed results for a better presentation, we will run a dataset that
-####### codes the numeric categorical variables as integer values 
-
-
-set.seed(1)
-glm.index.i<- sample(1:nrow(glm.attrition), .7*nrow(glm.attrition))
-glm.train.i<- glm.attrition[glm.index.i,]
-glm.test.i<- glm.attrition[-glm.index.i,]
-
-
-### use cross validatoin to find the best lambda value
-test.cvfit.i<- cv.glmnet(model.glm.train, m.labels.train, 
-                       family = 'binomial',
-                       type.measure = 'class',
-                       nlambda = 1000,
-                       standardize = F) #be sure to set to FALSE since we already standardized
-logit.model.i<- glmnet(model.glm.train, m.labels.train,
-                     alpha = 1,
-                     family = "binomial",
-                     standardize = F,
-                     lambda = test.cvfit$lambda.min)
-
-logit.model.i$beta
-plot(test.cvfit.i)
-```
-
-Top 3 factors leading to attrition
-1. Working overtime
-2. Marital Status
-3. Job Involvement 
 ```{r logistic model predictions}
 
 fit.pred<- predict(logit.model, newx = glm.test, type= 'response')
@@ -373,7 +363,7 @@ auc.train<- auc.train@y.values
 ```
 
 ```{r ROC curve, confusion matrix}
-plot(roc.perf,main="LASSO Error Rate")
+plot(roc.perf,main="LASSO ROC")
 abline(a=0, b= 1) #Ref line indicating poor performance
 text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 
