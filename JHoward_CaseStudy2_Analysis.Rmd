@@ -1,5 +1,5 @@
 ---
-title: "JHoward_CaseStudy2DDS"
+title: "Attrition at D.D.S. Analytics"
 author: "Justin Howard"
 date: "August 7, 2019"
 output: html_document
@@ -9,16 +9,112 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Identifying the top 3 factors that lead to attrition.
+## Introduction
 
-derived attributes/variables are possible
+Data is the buzz-word of the twenty-first century. The rapid expansion of predictive analytics to fields outside the finance and manufacturing industries is opening new opportunities in every field. At D.D.S. Analytics, we are embarking on a project that will enhance our ability to provide our clients with a deeper understanding of their human capital flows, beginning with attrition. Every journey begins with a single step, and our first charge is to understand our employees. We focus mainly on attrition and its accompanying trends, but will also include a brief but instructive analysis of our current patterns related to compensation. 
 
-Identify job role specific trends that exist.
+We explored the data to find surface-level trends using standard exploratory techniques and also used more advanced machine learning techniques to find hidden trends. We conducted a comparative review of three predictive classification models to choose the model that best identified the top three single factors that lead to attrition. Those factors and many other less important predictors had significant variance between their levels. To capture the influence of individual factor levels, we re-tooled the most predictive model to offer a more detailed, level-based analysis to examine which responses were the best predictors of attrition. 
 
-Make model that predicts salary with RMSE < $3000
-
-Link to video presentation:
+-------------------------------------------------------------------------------------
+Link to video presentation (please use Internet Explorer):
 https://www.screencast.com/t/MsRfs5V5a
+
+Link to GitHub repository:
+https://www.github.com/juhoward/CaseStudy2DDS
+-------------------------------------------------------------------------------------
+
+# Data Description
+
+The dataset examined has the following dimensions:
+
+---------------------------------
+Feature                    Result
+------------------------ --------
+Number of observations        870
+
+Number of variables            36
+---------------------------------
+
+
+# Codebook Summary Table
+
+-------------------------------------------------------------------------------------
+Label   Variable                         Class       # unique  Missing  Description  
+                                                       values                        
+------- -------------------------------- --------- ---------- --------- -------------
+        **[ID]**                         integer          870  0.00 %   Employee ID Number             
+
+        **[Age]**                        integer           43  0.00 %   Employee Age             
+
+        **[Attrition]**                  factor             2  0.00 %   "Yes" or "No" if employee left company               
+
+        **[BusinessTravel]**             factor             3  0.00 %   Non-Travel, Travel_Frequently, Travel_Rarely           
+
+        **[DailyRate]**                  integer          627  0.00 %   Daily pay              
+
+        **[Department]**                 factor             3  0.00 %   Human Resources, Research & Dev., Sales             
+
+        **[DistanceFromHome]**           integer           29  0.00 %   Commute distance             
+
+        **[Education]**                  integer            5  0.00 %   Levels of education from 1-5           
+
+        **[EducationField]**             factor             6  0.00 %   Degree field             
+
+        **[EmployeeCount]**              integer            1  0.00 %   Number of employees             
+
+        **[EmployeeNumber]**             integer          870  0.00 %   Employee number             
+
+        **[EnvironmentSatisfaction]**    integer            4  0.00 %   Satisfaction rating from 1-4             
+
+        **[Gender]**                     factor             2  0.00 %   Male or Female             
+
+        **[HourlyRate]**                 integer           71  0.00 %   Hourly pay             
+
+        **[JobInvolvement]**             integer            4  0.00 %   Employee's expressed involvement in job             
+
+        **[JobLevel]**                   integer            5  0.00 %   Employee rank             
+
+        **[JobRole]**                    factor             9  0.00 %   Job title             
+
+        **[JobSatisfaction]**            integer            4  0.00 %   Employee's satisfaction rating from 1-4             
+
+        **[MaritalStatus]**              factor             3  0.00 %   Marital status from Divorced, Married, Single             
+
+        **[MonthlyIncome]**              integer          826  0.00 %   Monthly salary             
+
+        **[MonthlyRate]**                integer          852  0.00 %   Monthly rate of pay             
+
+        **[NumCompaniesWorked]**         integer           10  0.00 %   Number of companies worked for in the past             
+
+        **[Over18]**                     factor             1  0.00 %   Yes for over 18             
+
+        **[OverTime]**                   factor             2  0.00 %   Yes or No for having worked overtime             
+
+        **[PercentSalaryHike]**          integer           15  0.00 %   Percentage of last raise in pay             
+
+        **[PerformanceRating]**          integer            2  0.00 %   Job skill rating from 1-4             
+
+        **[RelationshipSatisfaction]**   integer            4  0.00 %   Employee satisfaction with their manager             
+
+        **[StandardHours]**              integer            1  0.00 %   Number of hours worked per week             
+
+        **[StockOptionLevel]**           integer            4  0.00 %   Vestagure in company stock             
+
+        **[TotalWorkingYears]**          integer           39  0.00 %   Total number of working years for employee             
+
+        **[TrainingTimesLastYear]**      integer            7  0.00 %   Number of trainings attended within 1 year             
+
+        **[WorkLifeBalance]**            integer            4  0.00 %   Employee rating from 1-4             
+
+        **[YearsAtCompany]**             integer           32  0.00 %   Number of years at D.D.S. Analytics             
+
+        **[YearsInCurrentRole]**         integer           19  0.00 %   Number of years in current position             
+
+        **[YearsSinceLastPromotion]**    integer           16  0.00 %   Number of years since last promotion             
+
+        **[YearsWithCurrManager]**       integer           17  0.00 %   Number of years working with manager             
+-------------------------------------------------------------------------------------
+
 
 ```{r echo=F, include=F}
 library(doParallel)
@@ -31,8 +127,10 @@ workers <- makeCluster(7L)
 # register for parallel computation
 registerDoParallel(workers)
 ```
-```{r loading data}
+```{r loading data, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 library(frequency)
+library(dlookr)
+library(tidyverse)
 library(ggplot2)
 library(gridExtra)
 library(dplyr)
@@ -56,7 +154,7 @@ df3<- read_excel("CaseStudy2Compset No Salary.xlsx")
 str(df1)
 ```
 
-```{r data structure exploration}
+```{r data structure exploration, include =F}
 # make new dataset made of only useful variables
 attrition<- df1[,-c(1, 10, 11, 23, 28)]
 str(attrition)
@@ -91,24 +189,42 @@ salary[,cat.names]<- data.frame(lapply(salary[,cat.names], factor))
 external.sal<- df3[,-c(1, 10, 11, 22, 27)]
 external.sal[,cat.names]<- data.frame(lapply(external.sal[,cat.names], factor))
 ```
-```{r clean external validation set}
+```{r clean external validation set, include=F}
 df2.0<- df2[,-c(1, 9, 10, 22, 27)]
 
 df2.0[,cat.names[-1]]<- data.frame(lapply(df2.0[,cat.names[-1]], factor))
 ```
-```{r parallel computing, echo=F, include=F}
-# enabling parallel computing to speed things up
-library(doParallel)
-cores <- parallel::detectCores()
-# [1] 8
 
-# Generally do one less
-workers <- makeCluster(8L)
+#Exploratory Data Analysis
+###Validation of Assumptions
 
-# register for parallel computation
-registerDoParallel(workers)
+Given the nature of the binary response variable, Attrition, we choose to build a logistic regression model to fit the data. Logistic regression requires us to meet some primary assumptions. These are the assumptions of the outcome being binary, linearity as it relates between the logit of the outcome and each predictor, the addressing of influential values in continuous predictors, and no high multicollinearity. 
+
+•	Binary Outcome – As discussed, we are attempting to predict whether the Attrition variable will be a "Yes" or "No" response. This is a binary outcome and will suffice to satisfy this assumption. 
+•	Linearity – Reviewing the Appendix figure titled Linearity Assumption Checks we see a plot of a fully saturated model. From this we can see that there is curvature to some of these variables. This is expressed highly with fixed acidity, pH, and residual sugar. The other variables look ok in terms of linearity. Understanding this, we proceed with caution and for now assume this assumption met.
+•	Influential Values – In reviewing the figure CooksD-Outliers, we see graphing of high leverage observations. We see three data points that stands out. These observations (id=1082, 4381, 5501) were reviewed, but no legitimate reason was found to exclude it from analysis. We left the data set intact.
+•	Multi-collinearity – The saturate model was reviewed, and it was found that density had a high variable inflation factor (VIF) of 10, and alcohol had a VIF of 5. All other VIF were reasonable. We will address these collinearity issues during feature selection. 
+
+**Descriptive Statistics**
+
+Significant departures from normality appear prevalent across all variables. A series of density plots will be used for further examination. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+#Full dataset : Descriptive Statistics- sort by skewness
+df1 %>%
+  describe() %>%
+  filter(!is.na(skewness)) %>% 
+  arrange(desc(abs(skewness)))
 ```
-```{r density plots}
+
+
+
+###Examining Continuous Variables
+
+We will proceed to examine both numerically coded and continuous variables for normality and homoscedasticity. Significant departures from normality are very clear across all continuous variables. Given the size of the dataset and the choice of logistic regression as the primary method of analysis, we will accept the departures in normality for the exmaination of attrition and use non-parametric classification techniques, such as KNN and Naive Bayes, that do not depend on the normal distribution. We will address these departures when we conduct our linear regression on Monthly Income.
+
+```{r density plots, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 # assessing normality of the continuous variables
 columns1<- colnames(cont) [2:9]
 columns2<- colnames(cont) [10:15]
@@ -137,7 +253,10 @@ dens2 <- lapply(columns2, FUN=function(var) {
 do.call(grid.arrange, args=c(dens1, list(ncol=3)))
 do.call(grid.arrange, args=c(dens2, list(ncol=3)))
 ```
-```{r scatterplots}
+
+Linear relationships are difficult to ascertain except in the case of Age verses MonthlyIncome. A very clear linear relationship exists between the two variables. A clear, but less useful linear relationiship exists between YearsAtCompany, TotalWorkingYears and YearsInCurrentRole. A correlation matrix will be used to assess the Pearson's R correlations between these variables and we will proceed with multicollinearity problems in mind. 
+
+```{r scatterplots, echo=F}
 # assessing linearity of the continuous variables
 attrition.numeric  <- attrition.f %>% keep(is.integer)
 pairs(attrition.numeric[1:5], col=attrition.f$Attrition)
@@ -148,28 +267,12 @@ pairs(attrition.numeric[1:5], col=attrition.f$OverTime)
 pairs(attrition.numeric[6:10], col=attrition.f$OverTime)
 pairs(attrition.numeric[11:14], col=attrition.f$OverTime)
 ```
-```{r analyzing categoricals}
-ggplot(df1, aes(y=(MonthlyIncome/1000), x=Department, fill=Department)) +
-  geom_boxplot(outlier.colour="black", outlier.shape=16,
-             outlier.size=2, notch=FALSE) +
-  coord_flip() + labs(title = "Compensation by Department", y = "Monthly Income / 1000") +
-    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
-  
-ggplot(df1, aes(y=(MonthlyIncome/1000), x=JobRole, fill= JobRole)) +
-  coord_flip() +
-  geom_boxplot(outlier.colour="black", outlier.shape=16,
-             outlier.size=2, notch=FALSE)  +
-    coord_flip() + labs(title = "Compensation by Job", y = "Monthly Income / 1000") +
-    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
 
-ggplot(df1, aes(y=(MonthlyIncome,fill= MonthlyIncome))) +
-  coord_flip() +
-  geom_boxplot(outlier.colour="black", outlier.shape=16,
-             outlier.size=2, notch=FALSE)  +
-    coord_flip() + labs(title = "Compensation by Job", y = "Monthly Income / 1000") +
-    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
-```
-```{r}
+**A closer look at continuous variable relationships**
+
+A strong linear relationship between Age and MonthlyIncome exists. Job Performance is negatively correlated with MonthlyIncome. MonthlyIncome does vary between departments and that variance will be examined for statistical significance in the salary regression. A clear relationship between the MonthlyIncome, Department and JobRole variables exists.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
 plotdf<- df1
 plotdf[,24]<- df1[,factor(24)]
 plotdf[,24]<- data.frame(lapply(plotdf[,24], factor))
@@ -185,10 +288,28 @@ ggplot(df1, aes(x=as.factor(PerformanceRating), y=MonthlyIncome, col=Age)) +
   geom_point()+
   labs(title = "Compensation by Performance", x= "Performance Rating") +
   theme(plot.title = element_text(hjust = .5))
-
-
 ```
-```{r categorical graphs}
+
+```{r analyzing categoricals, echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(df1, aes(y=(MonthlyIncome/1000), x=Department, fill=Department)) +
+  geom_boxplot(outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE) +
+  coord_flip() + labs(title = "Compensation by Department", y = "Monthly Income / 1000") +
+    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
+  
+ggplot(df1, aes(y=(MonthlyIncome/1000), x=JobRole, fill= JobRole)) +
+  coord_flip() +
+  geom_boxplot(outlier.colour="black", outlier.shape=16,
+             outlier.size=2, notch=FALSE)  +
+    coord_flip() + labs(title = "Compensation by Job", y = "Monthly Income / 1000") +
+    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5))
+```
+
+
+Signficant relationships exist between attrition and many of the following categorical variables:
+
+
+```{r categorical graphs, echo=FALSE, message=FALSE, warning=FALSE}
 
 lotsabars <- function(df, x,y){
   ggplot(data= df, aes_string(x = x, fill = y)) + 
@@ -214,25 +335,17 @@ plot_grid(plotlist = plist, ncol = 2)
 
 lapply(xname, function(x) lotsabars(df = attrition.cats, x = x, y = yname))
 ```
-```{r plots of particular interest}
-  ggplot(data= attrition, aes_string(x = attrition$JobInvolvement, fill = attrition$Attrition)) + 
-    geom_bar(alpha = 0.9, position = "fill") +
-    coord_flip() +
-    labs(title = "Job Involvement", y = "Proportion") +
-    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5)) +
-    guides(fill= guide_legend(title = "Attrition"))
 
-  ggplot(data= attrition, aes_string(x = attrition$Department, fill = attrition$OverTime)) + 
-    geom_bar(alpha = 0.9, position = "fill") +
-    coord_flip() +
-    labs(title = "Job Involvement", y = "Proportion") +
-    theme(axis.title.y = element_blank(),  plot.title = element_text(hjust = .5)) +
-    guides(fill= guide_legend(title = "Attrition"))
-  
+Signficant relationships are visualized between OverTime and the following categorical variables:
+
+```{r plots of particular interest, echo=FALSE, message=FALSE, warning=FALSE}
 yovertime<- "OverTime"
 lapply(xname, function(x) lotsabars(df = attrition.cats, x = x, y = yovertime))
 ```
-```{r correlation plot}
+
+Multicollinearity issues are present throughout the data and are especially strong among Age, YearsWithCurrManager, YearsAtCompany, YearsInCurrentRole and TotalWorkingyears. Our regression model will require penalty terms to compensate for the strong correlations indicated here. 
+
+```{r correlation plot, echo=FALSE, message=FALSE, warning=FALSE}
 # correlation function for numeric and continuous predictors
 correlator  <-  function(df){
 	df %>%
@@ -247,7 +360,7 @@ correlator  <-  function(df){
 
 correlator(attrition.numeric)
 ```
-```{r correlations of interest}
+```{r correlations of interest, echo=FALSE, message=FALSE, warning=FALSE}
 interest<- attrition %>%
   select(c("OverTime", "MaritalStatus"))
 interest<- sapply(interest, function(x) as.numeric(x))
@@ -265,7 +378,7 @@ dropout(interest.plus, boring)
 
 correlator(soCool)
 ```
-```{r train test set split}
+```{r train test set split,echo=FALSE, message=FALSE, warning=FALSE}
 # changing nominal factors to ordinal factors so algorithms work.
 columns<- c(2, 3, 5, 8, 10, 14, 16, 20)
 attrition[, columns]<- sapply(attrition[, columns], as.numeric)
@@ -342,7 +455,7 @@ Top 3 factors leading to attrition
 2. Marital Status
 3. Job Involvement 
 
-```{r logistic model predictions}
+```{r logistic model 1 predictions, echo=FALSE, message=FALSE, warning=FALSE}
 
 fit.pred<- predict(logit.model.i, newx = glm.test.i, type= 'response')
 pred<- prediction(fit.pred[,1], f.labels.test)
@@ -350,7 +463,7 @@ roc.perf<- performance(pred, measure = 'tpr', x.measure = 'fpr')
 auc.train<- performance (pred, measure = 'auc')
 auc.train<- auc.train@y.values
 ```
-```{r ROC curve, confusion matrix}
+```{r ROC curve, confusion matrix, echo=FALSE, message=FALSE, warning=FALSE}
 plot(roc.perf,main="LASSO ROC")
 abline(a=0, b= 1) #Ref line indicating poor performance
 text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
@@ -365,16 +478,20 @@ tn <- confusion.matrix[1]
 tp <- confusion.matrix[4]
 fp <- confusion.matrix[3]
 fn <- confusion.matrix[2]
-
+paste("Accuracy")
 (accuracy <- (tp + tn) / (tp + tn + fp + fn))
+paste("Sensitivity")
 (sensitivity<- (tp / (tp + fn)))
+paste("Specificity")
 (specificity<- (tn / (tn + fp)))
+paste("Misclassification Rate")
 (misclassification.rate <- 1 - accuracy)
-(recall <- tp / (tp + fn))
-(precision <- tp / (tp + fp))
-(null.error.rate <- tn / (tp + tn + fp + fn))
-(FScore <- 2 * precision * recall / (precision + recall))
+paste("Null Error Rate")
+(null.error.rate <- 1 - (tn / (tp + tn + fp + fn)))
+paste("F-Score")
+(FScore <- 2 * sensitivity * specificity / (sensitivity + specificity))
 confusion.matrix
+
 ```
 ```{r logistic with true categories}
 
@@ -428,7 +545,7 @@ logit.model$beta
 plot(test.cvfit)
 ```
 
-```{r logistic model predictions}
+```{r logistic model 1 .predictions, echo=FALSE, message=FALSE, warning=FALSE}
 
 fit.pred.2<- predict(logit.model, newx = glm.test, type= 'response')
 pred.2<- prediction(fit.pred.2[,1], f.labels.test)
@@ -437,7 +554,7 @@ auc.train.2<- performance (pred.2, measure = 'auc')
 auc.train.2<- auc.train.2@y.values
 ```
 
-```{r ROC curve, confusion matrix}
+```{r Accuracy, echo=FALSE, message=FALSE, warning=FALSE}
 plot(roc.perf.2,main="LASSO ROC")
 abline(a=0, b= 1) #Ref line indicating poor performance
 text(x = .40, y = .6,paste("AUC = ", round(auc.train.2[[1]],3), sep = ""))
